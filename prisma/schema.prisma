@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Book {
+  id          Int         @id @default(autoincrement())
+  bidangStudi String      @map("bidang_studi")
+  jenjang     String      // SD, SMP, SMA, SMK, MADRASAH, AKM, P5, dll
+  kategori    String      // Nama sheet: "sd", "SMP", "SMA", dll
+  kelas       String?     // Kelas (bisa string karena ada yang kosong)
+  halaman     Int?
+  hargaLks    Int?        @map("harga_lks")
+  hargaPg     Int?        @map("harga_pg")
+  halPg       Int?        @map("hal_pg")
+  jenis       String?     // AKM, AKMI, P5, LKS, dll
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  orderItems  OrderItem[]
+
+  @@map("books")
+}
+
+model Buyer {
+  id        Int      @id @default(autoincrement())
+  nama      String
+  area      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  orders    Order[]
+
+  @@map("buyers")
+}
+
+model Order {
+  id              Int         @id @default(autoincrement())
+  buyerId         Int         @map("buyer_id")
+  nomorNota       String      @unique @map("nomor_nota")
+  tanggal         DateTime    @default(now())
+  jenjangFilter   String?     @map("jenjang_filter")
+  subtotal        Int         @default(0)
+  potonganPersen  Float       @default(10) @map("potongan_persen")
+  potonganNominal Int         @default(0) @map("potongan_nominal")
+  netto           Int         @default(0)
+  status          String      @default("pending") // pending, confirmed
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  buyer           Buyer       @relation(fields: [buyerId], references: [id])
+  items           OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          Int    @id @default(autoincrement())
+  orderId     Int    @map("order_id")
+  bookId      Int    @map("book_id")
+  jumlah      Int
+  hargaSatuan Int    @map("harga_satuan")
+  totalHarga  Int    @map("total_harga")
+
+  order       Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  book        Book   @relation(fields: [bookId], references: [id])
+
+  @@map("order_items")
+}
+
+model Admin {
+  id           Int    @id @default(autoincrement())
+  username     String @unique
+  passwordHash String @map("password_hash")
+
+  @@map("admins")
+}
