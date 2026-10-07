@@ -30,7 +30,7 @@ function formatDate(s: string) {
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: '2-digit' })
 }
 
-export default function NotaClient({ order }: { order: OrderData }) {
+export default function NotaClient({ order, isAdmin }: { order: OrderData; isAdmin: boolean }) {
   const totalEks = order.items.reduce((s, i) => s + i.jumlah, 0)
 
   const handleConfirm = async () => {
@@ -128,9 +128,11 @@ export default function NotaClient({ order }: { order: OrderData }) {
 
       {/* Actions */}
       <div className="nota-actions no-print">
-        <Link href="/" className="btn btn-outline">← Beranda</Link>
+        <Link href={isAdmin ? '/admin/dashboard' : '/user/order'} className="btn btn-outline">
+          {'\u2190'} {isAdmin ? 'Dashboard' : 'Pesanan Saya'}
+        </Link>
         <button className="btn btn-outline" onClick={() => window.print()}>🖨️ Cetak Nota</button>
-        {order.status === 'pending' && (
+        {isAdmin && order.status === 'pending' && (
           <button className="btn btn-primary" onClick={handleConfirm}>✓ Konfirmasi Pesanan</button>
         )}
         {order.status === 'confirmed' && (

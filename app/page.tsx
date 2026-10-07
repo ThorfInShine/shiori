@@ -1,5 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import { NavLinks } from './nav-links'
+import { RevealObserver } from './reveal'
 import { prisma } from '@/lib/prisma'
 
 const JENJANG_COLORS: Record<string, string> = {
@@ -28,37 +30,39 @@ export default async function Home() {
     jenjangData = raw.map(r => ({ jenjang: r.jenjang, _count: r._count._all }))
     totalBooks = jenjangData.reduce((s, j) => s + j._count, 0)
   } catch {
-    // DB not connected Ã¢â‚¬â€ show page with empty state
+    // DB not connected — show page with empty state
   }
 
   const jenjangCount = jenjangData.length || 0
 
   return (
     <div className="lp">
-      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Navbar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
+      <RevealObserver />
+      {/* Navbar */}
       <nav className="lp-nav" id="lp-navbar">
         <Link href="/" className="lp-brand">
           <Image
-            src="/assets/Screenshot 2026-09-28 234611.png"
-            alt="Ã¦Â Å¾ Shiori mascot"
+            src="/assets/shiori-mascot.png"
+            alt="Shiori mascot"
             width={36}
             height={36}
             className="lp-brand-mascot"
           />
-          <span className="lp-brand-kanji">Ã¦Â Å¾</span>
+          <span className="lp-brand-kanji">{'\u681E'}</span>
           <span className="lp-brand-name">Shiori</span>
         </Link>
+        <NavLinks />
         <Link href="/admin" className="lp-nav-login" id="lp-login-nav">
           Masuk
         </Link>
       </nav>
 
-      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Washi tape accent Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
+      {/* Washi tape accent */}
       <div className="lp-washi" aria-hidden="true" />
 
-      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Hero Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
+      {/* Hero */}
       <section className="lp-hero" id="lp-hero">
-        <div className="lp-hero-text">
+        <div className="lp-hero-text" data-reveal>
           <h1 className="lp-headline">
             Pesan Buku Pelajaran
             <br />
@@ -66,7 +70,7 @@ export default async function Home() {
           </h1>
           <p className="lp-subline">
             Sistem pemesanan buku LKS &amp; PG dari CV Putra Nugraha.
-            Pilih jenjang, tentukan buku, terima nota&nbsp;Ã¢â‚¬â€ selesai.
+            Pilih jenjang, tentukan buku, terima nota&nbsp;&mdash; selesai.
           </p>
 
           <div className="lp-hero-actions">
@@ -81,113 +85,139 @@ export default async function Home() {
 
           <div className="lp-stats">
             <div className="lp-stat">
-              <span className="lp-stat-num">{totalBooks || 'Ã¢â‚¬â€'}</span>
+              <span className="lp-stat-num">{totalBooks || '\u2014'}</span>
               <span className="lp-stat-label">Buku Tersedia</span>
             </div>
             <div className="lp-stat-dot" />
             <div className="lp-stat">
-              <span className="lp-stat-num">{jenjangCount || 'Ã¢â‚¬â€'}</span>
+              <span className="lp-stat-num">{jenjangCount || '\u2014'}</span>
               <span className="lp-stat-label">Jenjang</span>
             </div>
           </div>
         </div>
 
-        <div className="lp-hero-visual">
+        <div className="lp-hero-visual" data-reveal>
           <Image
-            src="/assets/Screenshot 2026-09-28 234611.png"
-            alt="Ã¦Â Å¾ Shiori mascot"
-            width={280}
-            height={280}
+            src="/assets/shiori-mascot.png"
+            alt="Shiori mascot"
+            width={420}
+            height={420}
             className="lp-hero-mascot"
             priority
           />
         </div>
+
+        <a href="#lp-jenjang" className="lp-scroll-cue" aria-label="Scroll ke katalog">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </a>
       </section>
 
-      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Jenjang grid Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
-
-      <section className="lp-section" id="lp-jenjang">
-        <h2 className="lp-section-title">Pilih Jenjang</h2>
-        <p className="lp-section-sub">
-          Pilih jenjang pendidikan untuk melihat daftar buku yang tersedia
-        </p>
-        <div className="lp-jenjang-grid">
+      {/* Bookshelf */}
+      <section className="lp-shelf-section" id="lp-jenjang">
+        <div className="lp-shelf-inner">
+          <h2 className="lp-section-title" data-reveal>Rak Buku</h2>
+          <p className="lp-section-sub">
+            Klik buku untuk melihat daftar buku yang tersedia
+          </p>
           {jenjangData.length > 0 ? (
-            jenjangData.map(j => {
-              const color = JENJANG_COLORS[j.jenjang] || '#b0b0b0'
-              return (
-                <Link
-                  key={j.jenjang}
-                  href={`/order?jenjang=${encodeURIComponent(j.jenjang)}`}
-                  className="lp-jenjang-card"
-                  style={{ '--jenjang-color': color } as React.CSSProperties}
-                >
-                  <div className="lp-jenjang-tab" />
-                  <div className="lp-jenjang-body">
-                    <span className="lp-jenjang-name">{j.jenjang}</span>
-                    <span className="lp-jenjang-count">{j._count} buku</span>
+            <div className="lp-bookshelf">
+              {Array.from({ length: Math.ceil(jenjangData.length / 5) }, (_, row) => (
+                <div key={row} className="lp-shelf-row">
+                  <div className="lp-shelf-books" data-reveal>
+                    {jenjangData.slice(row * 5, row * 5 + 5).map(j => {
+                      const color = JENJANG_COLORS[j.jenjang] || '#b0b0b0'
+                      return (
+                        <div
+                          key={j.jenjang}
+                          className="lp-book"
+                          style={{ '--book-color': color } as React.CSSProperties}
+                          title={`${j.jenjang} - ${j._count} buku`}
+                        >
+                          <div className="lp-book-body">
+                            <div className="lp-book-front">
+                              <div className="lp-book-bind" />
+                              <div className="lp-book-stripe" />
+                              <div className="lp-book-info">
+                                <div className="lp-book-bind lp-book-bind--light" />
+                                <span className="lp-book-title">{j.jenjang}</span>
+                                <span className="lp-book-count">{j._count} buku</span>
+                              </div>
+                              <div className="lp-book-border" />
+                            </div>
+                            <div className="lp-book-spine" />
+                            <div className="lp-book-back" />
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                </Link>
-              )
-            })
+                  <div className="lp-shelf-plank" />
+                </div>
+              ))}
+            </div>
           ) : (
-            <p className="lp-empty">Katalog belum dimuat</p>
+            <p className="lp-empty">Katalog sedang dimuat. <a href="/" className="lp-empty-link">Muat ulang halaman</a></p>
           )}
         </div>
       </section>
 
-
-
-      {/* Ã¢â€â‚¬Ã¢â€â‚¬ How it works Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
-      <section className="lp-section lp-steps-section" id="lp-how">
-        <h2 className="lp-section-title">Cara Memesan</h2>
+      {/* Timeline: How it works */}
+      <section className="lp-section" id="lp-how">
+        <h2 className="lp-section-title" data-reveal>Cara Memesan</h2>
         <p className="lp-section-sub">Tiga langkah, tanpa ribet</p>
 
-        <div className="lp-steps">
-          <div className="lp-step">
-            <div className="lp-step-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
-                <path d="M8 7h6"/><path d="M8 11h8"/>
-              </svg>
+        <div className="lp-timeline">
+          <div className="lp-timeline-track" aria-hidden="true" />
+
+          <div className="lp-tl-item" data-reveal>
+            <div className="lp-tl-marker">1</div>
+            <div className="lp-tl-card">
+              <div className="lp-tl-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
+                  <path d="M8 7h6"/><path d="M8 11h8"/>
+                </svg>
+              </div>
+              <h3 className="lp-tl-title">Pilih Jenjang</h3>
+              <p className="lp-tl-desc">Pilih jenjang pendidikan yang sesuai dengan kebutuhan sekolah Anda</p>
             </div>
-            <h3 className="lp-step-title">Pilih Jenjang</h3>
-            <p className="lp-step-desc">Pilih jenjang pendidikan yang sesuai dengan kebutuhan sekolah</p>
           </div>
 
-          <div className="lp-step-line" />
-
-          <div className="lp-step">
-            <div className="lp-step-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
-                <path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>
-              </svg>
+          <div className="lp-tl-item" data-reveal>
+            <div className="lp-tl-marker">2</div>
+            <div className="lp-tl-card">
+              <div className="lp-tl-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
+                  <path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>
+                </svg>
+              </div>
+              <h3 className="lp-tl-title">Tentukan Buku</h3>
+              <p className="lp-tl-desc">Pilih buku dan tentukan jumlah pesanan untuk setiap mata pelajaran</p>
             </div>
-            <h3 className="lp-step-title">Tentukan Buku</h3>
-            <p className="lp-step-desc">Pilih buku dan tentukan jumlah pesanan untuk setiap mata pelajaran</p>
           </div>
 
-          <div className="lp-step-line" />
-
-          <div className="lp-step">
-            <div className="lp-step-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <path d="M7 7h10"/><path d="M7 11h10"/><path d="M7 15h6"/>
-              </svg>
+          <div className="lp-tl-item" data-reveal>
+            <div className="lp-tl-marker">3</div>
+            <div className="lp-tl-card">
+              <div className="lp-tl-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <path d="M7 7h10"/><path d="M7 11h10"/><path d="M7 15h6"/>
+                </svg>
+              </div>
+              <h3 className="lp-tl-title">Terima Nota</h3>
+              <p className="lp-tl-desc">Nota pesanan terbit otomatis, siap untuk diproses dan dikirim</p>
             </div>
-            <h3 className="lp-step-title">Terima Nota</h3>
-            <p className="lp-step-desc">Nota pesanan terbit otomatis, siap untuk diproses</p>
           </div>
         </div>
       </section>
 
-      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Footer Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
+      {/* Footer */}
       <footer className="lp-footer" id="lp-footer">
         <div className="lp-footer-inner">
           <div className="lp-footer-brand">
-            <span className="lp-footer-kanji">Ã¦Â Å¾</span>
+            <span className="lp-footer-kanji">{'\u681E'}</span>
             <span className="lp-footer-name">Shiori</span>
           </div>
           <div className="lp-footer-info">

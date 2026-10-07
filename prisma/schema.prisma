@@ -21,6 +21,7 @@ model Book {
   createdAt   DateTime    @default(now()) @map("created_at")
 
   orderItems  OrderItem[]
+  savedCart   SavedCart[]
 
   @@map("books")
 }
@@ -39,6 +40,7 @@ model Buyer {
 model Order {
   id              Int         @id @default(autoincrement())
   buyerId         Int         @map("buyer_id")
+  divisionId      Int?        @map("division_id")
   nomorNota       String      @unique @map("nomor_nota")
   tanggal         DateTime    @default(now())
   jenjangFilter   String?     @map("jenjang_filter")
@@ -50,6 +52,7 @@ model Order {
   createdAt       DateTime    @default(now()) @map("created_at")
 
   buyer           Buyer       @relation(fields: [buyerId], references: [id])
+  division        Division?   @relation(fields: [divisionId], references: [id])
   items           OrderItem[]
 
   @@map("orders")
@@ -75,4 +78,31 @@ model Admin {
   passwordHash String @map("password_hash")
 
   @@map("admins")
+}
+
+model Division {
+  id           Int      @id @default(autoincrement())
+  namaDivisi   String   @map("nama_divisi")
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  orders       Order[]
+  savedCart    SavedCart[]
+
+  @@map("divisions")
+}
+
+model SavedCart {
+  id         Int      @id @default(autoincrement())
+  divisionId Int      @map("division_id")
+  bookId     Int      @map("book_id")
+  jenis      String   // 'lks' or 'pg'
+  jumlah     Int
+
+  division   Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  book       Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([divisionId, bookId, jenis])
+  @@map("saved_carts")
 }

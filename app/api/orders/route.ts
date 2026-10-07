@@ -1,8 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAdminSession, unauthorized } from '@/lib/auth'
 
-// Create order
+// Create order (admin only)
 export async function POST(req: NextRequest) {
+  if (!await getAdminSession()) return unauthorized()
   const body = await req.json()
   const { nama, area, jenjangFilter, items, potonganPersen = 10 } = body
 
@@ -56,8 +58,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(order)
 }
 
-// Get all orders (for admin)
+// Get all orders (admin only)
 export async function GET() {
+  if (!await getAdminSession()) return unauthorized()
   const orders = await prisma.order.findMany({
     include: { items: { include: { book: true } }, buyer: true },
     orderBy: { createdAt: 'desc' },

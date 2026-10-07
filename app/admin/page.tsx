@@ -23,7 +23,11 @@ export default function AdminLogin() {
       })
       const data = await res.json()
       if (data.ok) {
-        router.push('/admin/dashboard')
+        if (data.role === 'admin') {
+          router.push('/admin/dashboard')
+        } else {
+          router.push('/user/order')
+        }
       } else {
         setError(data.error || 'Login gagal')
       }
@@ -37,9 +41,9 @@ export default function AdminLogin() {
   return (
     <div className="admin-login">
       <form className="glass-card admin-login-card" onSubmit={handleLogin}>
-        <Image src="/assets/Screenshot 2026-09-28 234611.png" alt="Logo" width={64} height={64} style={{ margin: '0 auto 16px', display: 'block' }} />
-        <h1>Admin Login</h1>
-        <p>栞 Shiori — Panel Admin</p>
+        <Image src="/assets/shiori-mascot.png" alt="Logo" width={64} height={64} style={{ margin: '0 auto 16px', display: 'block' }} />
+        <h1>{'\u681E'} Shiori</h1>
+        <p>Masuk untuk melanjutkan</p>
         {error && <p style={{ color: 'var(--accent-red)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
         <div className="form-group">
           <label>Username</label>

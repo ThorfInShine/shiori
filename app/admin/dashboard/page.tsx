@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 type Book = {
   id: number
@@ -21,7 +22,7 @@ type Order = {
   status: string
   jenjangFilter: string | null
   buyer: { nama: string; area: string }
-  items: Array<{ jumlah: number; totalHarga: number; book: { bidangStudi: string } }>
+  items: Array<{ jumlah: number; totalHarga: number; book: { bidangStudi: string; jenjang: string } }>
 }
 
 function formatRp(n: number) { return 'Rp ' + n.toLocaleString('id-ID') }
@@ -88,52 +89,103 @@ function drawChart(canvas: HTMLCanvasElement, orders: Order[]) {
   })
 }
 
-type Tab = 'dashboard' | 'pesanan' | 'katalog' | 'pengaturan'
+type Tab = 'dashboard' | 'pesanan' | 'katalog' | 'pengaturan' | 'akun'
+
+const JENJANG_COLORS: Record<string, string> = {
+  SD: '#D4808A', SMP: '#7BA8C4', SMA: '#E8D070', SMK: '#C94C4C',
+  MADRASAH: '#B0A0C8', 'AKM & P5': '#7BA784', PROD: '#E89668',
+  TKA: '#D4A86A', 'ASAJ UM': '#8BAAB0', 'JURNAL & TK': '#C4A0B0',
+  MTS: '#9BB09B', MI: '#C4A070',
+}
 
 const navItems: { icon: string; label: string; sub: string; tab: Tab }[] = [
-  { icon: '/assets/Screenshot 2026-09-28 234844.png', label: 'Dashboard', sub: 'ダッシュボード', tab: 'dashboard' },
-  { icon: '/assets/Screenshot 2026-09-28 234951.png', label: 'Books', sub: '書籍一覧', tab: 'katalog' },
-  { icon: '/assets/Screenshot 2026-09-28 235034.png', label: 'Orders', sub: '注文管理', tab: 'pesanan' },
-  { icon: '/assets/Screenshot 2026-09-28 235317.png', label: 'Customers', sub: '顧客リスト', tab: 'pesanan' },
-  { icon: '/assets/Screenshot 2026-09-28 235452.png', label: 'Sales', sub: '売上分析', tab: 'dashboard' },
-  { icon: '/assets/Screenshot 2026-09-28 235127.png', label: 'Promotions', sub: 'キャンペーン', tab: 'pengaturan' },
-  { icon: '/assets/Screenshot 2026-09-28 235823.png', label: 'Settings', sub: '設定', tab: 'pengaturan' },
+  { icon: '/assets/icon-dashboard.png', label: 'Dasbor', sub: 'ダッシュボード', tab: 'dashboard' },
+  { icon: '/assets/icon-books.png', label: 'Katalog', sub: '書籍一覧', tab: 'katalog' },
+  { icon: '/assets/icon-orders.png', label: 'Pesanan', sub: '注文管理', tab: 'pesanan' },
+  { icon: '/assets/icon-customers.png', label: 'Akun', sub: 'アカウント', tab: 'akun' },
+  { icon: '/assets/icon-settings.png', label: 'Pengaturan', sub: '設定', tab: 'pengaturan' },
 ]
 
 const statCards = [
-  { title: 'Registered Books', sub: '登録書籍', icon: '/assets/Screenshot 2026-09-29 103503.png', key: 'books' },
-  { title: 'New Orders', sub: '新着注文', icon: '/assets/Screenshot 2026-09-29 102944.png', key: 'orders' },
-  { title: 'Daily Revenue', sub: '本日の売上', icon: '/assets/Screenshot 2026-09-29 103136.png', key: 'revenue' },
-  { title: 'Active Users', sub: 'アクティブユーザー', icon: '/assets/Screenshot 2026-09-29 102900.png', key: 'users' },
+  { title: 'Buku Terdaftar', sub: '登録書籍', icon: '/assets/icon-registered-books.png', key: 'books' },
+  { title: 'Pesanan Baru', sub: '新着注文', icon: '/assets/icon-new-orders.png', key: 'orders' },
+  { title: 'Pendapatan Hari Ini', sub: '本日の売上', icon: '/assets/icon-revenue.png', key: 'revenue' },
+  { title: 'Pengguna Aktif', sub: 'アクティブユーザー', icon: '/assets/icon-users.png', key: 'users' },
 ]
 
 export default function AdminDashboard() {
+  const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
   const [books, setBooks] = useState<Book[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   const [activeNavIdx, setActiveNavIdx] = useState(0)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogJenjang, setCatalogJenjang] = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
   const chartRef = useRef<HTMLCanvasElement>(null)
 
-  useEffect(() => {
-    fetch('/api/orders').then(r => r.json()).then(data => {
-      setOrders(data)
-      setTimeout(() => { if (chartRef.current) drawChart(chartRef.current, data) }, 100)
+  // Account management state
+  type AccAdmin = { id: number; username: string; createdAt: string }
+  type AccDiv = { id: number; namaDivisi: string; username: string; createdAt: string }
+  const [accAdmins, setAccAdmins] = useState<AccAdmin[]>([])
+  const [accDivisions, setAccDivisions] = useState<AccDiv[]>([])
+  const [accLoading, setAccLoading] = useState(false)
+  const [accMsg, setAccMsg] = useState('')
+  const [accForm, setAccForm] = useState<{ type: 'admin' | 'division'; username: string; password: string; namaDivisi: string }>({ type: 'division', username: '', password: '', namaDivisi: '' })
+  const [resetTarget, setResetTarget] = useState<{ type: 'admin' | 'division'; id: number; username: string } | null>(null)
+  const [resetPw, setResetPw] = useState('')
+
+  const loadAccounts = () => {
+    setAccLoading(true)
+    fetch('/api/admin/accounts').then(r => r.json()).then(d => {
+      setAccAdmins(d.admins || [])
+      setAccDivisions(d.divisions || [])
+      setAccLoading(false)
+    }).catch(() => setAccLoading(false))
+  }
+
+  const fetchData = useRef<() => void>(() => {})
+  fetchData.current = () => {
+    const ac = new AbortController()
+    setLoading(true)
+    setError(null)
+    Promise.all([
+      fetch('/api/orders', { signal: ac.signal }).then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() }),
+      fetch('/api/books', { signal: ac.signal }).then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() }),
+    ]).then(([ordersData, booksData]) => {
+      setOrders(ordersData)
+      setBooks(booksData)
+      setLoading(false)
+      setTimeout(() => { if (chartRef.current) drawChart(chartRef.current, ordersData) }, 100)
+    }).catch(e => {
+      if (e.name !== 'AbortError') { setError('Gagal memuat data. Periksa koneksi Anda.'); setLoading(false) }
     })
-    fetch('/api/books').then(r => r.json()).then(setBooks)
+    return () => ac.abort()
+  }
+
+  useEffect(() => {
+    const cleanup = fetchData.current()
+    return cleanup
   }, [])
 
   useEffect(() => {
     if (activeTab === 'dashboard') {
       setTimeout(() => { if (chartRef.current) drawChart(chartRef.current, orders) }, 50)
     }
+    if (activeTab === 'akun') loadAccounts()
   }, [activeTab, orders])
 
   useEffect(() => {
-    const onResize = () => { if (chartRef.current && activeTab === 'dashboard') drawChart(chartRef.current, orders) }
+    let timer: ReturnType<typeof setTimeout>
+    const onResize = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => { if (chartRef.current && activeTab === 'dashboard') drawChart(chartRef.current, orders) }, 150)
+    }
     window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    return () => { clearTimeout(timer); window.removeEventListener('resize', onResize) }
   }, [orders, activeTab])
 
   const totalNetto = orders.reduce((s, o) => s + o.netto, 0)
@@ -141,15 +193,24 @@ export default function AdminDashboard() {
   const confirmed = orders.filter(o => o.status === 'confirmed').length
   const pending = orders.filter(o => o.status === 'pending').length
 
+  const confirmOrder = async (id: number) => {
+    try {
+      const res = await fetch(`/api/orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'confirmed' }) })
+      if (res.ok) setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'confirmed' } : o))
+    } catch { /* noop */ }
+  }
+
   const bookSales = new Map<string, number>()
+  const bookJenjang = new Map<string, string>()
   orders.forEach(o => o.items.forEach(i => {
     bookSales.set(i.book.bidangStudi, (bookSales.get(i.book.bidangStudi) || 0) + i.jumlah)
+    if (!bookJenjang.has(i.book.bidangStudi)) bookJenjang.set(i.book.bidangStudi, i.book.jenjang)
   }))
   const bestSellers = Array.from(bookSales.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
 
   function getStatValue(key: string) {
     switch (key) {
-      case 'books': return { val: books.length.toLocaleString('id-ID'), unit: 'books' }
+      case 'books': return { val: books.length.toLocaleString('id-ID'), unit: 'buku' }
       case 'orders': return { val: String(orders.length), unit: 'total' }
       case 'revenue': return { val: formatRp(totalNetto), unit: '' }
       case 'users': return { val: String(confirmed + pending), unit: '' }
@@ -160,12 +221,15 @@ export default function AdminDashboard() {
   function handleNav(idx: number) {
     setActiveNavIdx(idx)
     setActiveTab(navItems[idx].tab)
+    setSidebarOpen(false)
   }
 
   return (
     <div className="db-root">
+      {/* Backdrop */}
+      {sidebarOpen && <div className="db-backdrop" onClick={() => setSidebarOpen(false)} />}
       {/* ===== SIDEBAR ===== */}
-      <aside className="db-sidebar">
+      <aside className={`db-sidebar${sidebarOpen ? ' db-sidebar--open' : ''}`}>
         {/* Red accent bar */}
         <div className="db-sidebar-accent" />
 
@@ -178,7 +242,7 @@ export default function AdminDashboard() {
               <span className="db-brand-col brand-red">BOOKS</span>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/assets/Screenshot 2026-09-28 234611.png" alt="Shiori" className="db-logo-mascot" />
+            <img src="/assets/shiori-mascot.png" alt="Shiori" className="db-logo-mascot" />
           </div>
 
           {/* Nav */}
@@ -203,7 +267,7 @@ export default function AdminDashboard() {
           <div className="db-sidebar-deco">
             {/* Lantern - large, left side */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/assets/Screenshot 2026-09-29 102900.png" alt="" className="db-sidebar-lantern" />
+            <img src="/assets/icon-users.png" alt="" className="db-sidebar-lantern" />
 
           </div>
           {/* Seigaiha wave - div with background-image for proper tiling */}
@@ -211,23 +275,43 @@ export default function AdminDashboard() {
         </div>
         {/* Cloud - outside inner to avoid overflow:hidden clipping */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/assets/Screenshot 2026-09-29 153513.png" alt="" className="db-sidebar-cloud" />
+        <img src="/assets/deco-cloud.png" alt="" className="db-sidebar-cloud" />
       </aside>
 
       {/* ===== MAIN ===== */}
       <main className="db-main">
         {/* Top bar */}
         <header className="db-topbar">
-          <h1 className="db-title">栞 Shiori Dashboard</h1>
+          <div className="db-topbar-brand">
+            <button className="db-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Menu">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/assets/shiori-mascot.png" alt="" className="db-topbar-mascot" />
+            <h1 className="db-title">栞 Shiori <span className="db-title-full">Dashboard</span></h1>
+          </div>
           <div className="db-topbar-actions">
             <Link href="/" className="db-home-btn">🏠 Beranda</Link>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/assets/Screenshot 2026-09-29 000844.png" alt="Notif" className="db-notif-icon" />
-            <div className="db-user-pill">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/assets/Screenshot 2026-09-29 103640.png" alt="Admin" className="db-user-avatar" />
-              <span>Admin</span>
-              <span className="db-chevron">▾</span>
+            <img src="/assets/icon-notification.png" alt="Notif" className="db-notif-icon" />
+            <div className="db-user-wrap">
+              <button className="db-user-pill" onClick={() => setShowUserMenu(v => !v)}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/assets/avatar-admin.png" alt="Admin" className="db-user-avatar" />
+                <span>Admin</span>
+                <span className="db-chevron">▾</span>
+              </button>
+              {showUserMenu && (
+                <>
+                  <div className="db-user-backdrop" onClick={() => setShowUserMenu(false)} />
+                  <div className="db-user-menu">
+                    <button className="db-user-menu-item" onClick={() => { document.cookie = 'admin_session=; path=/; max-age=0'; router.push('/admin') }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                      Keluar
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -235,15 +319,27 @@ export default function AdminDashboard() {
         {/* Content wrapper */}
         <div className="db-content-wrap">
 
+            {/* Loading state */}
+            {loading && (
+              <div className="db-loading">
+                <div className="db-loading-spinner" />
+                <p>Memuat data...</p>
+              </div>
+            )}
+
+            {/* Error state */}
+            {error && (
+              <div className="db-error">
+                <p>{error}</p>
+                <button className="db-sm-btn" onClick={() => fetchData.current()}>Coba lagi</button>
+              </div>
+            )}
+
             {/* ===== DASHBOARD ===== */}
-            {activeTab === 'dashboard' && (
+            {!loading && !error && activeTab === 'dashboard' && (
               <>
                 <div className="db-welcome-row">
-                  <p className="db-welcome">Welcome Back, Admin! ｜ <span>おかえりなさい！</span></p>
-                  <div className="db-search">
-                    <span>🔍</span>
-                    <input type="text" placeholder="Search..." />
-                  </div>
+                  <p className="db-welcome">Selamat Datang, Admin! ｜ <span>おかえりなさい！</span></p>
                 </div>
 
                 <div className="db-stat-grid">
@@ -266,8 +362,8 @@ export default function AdminDashboard() {
                 <div className="db-sales-row">
                   <div className="db-panel db-sales-panel">
                     <div className="db-panel-head">
-                      <h3>Sales Performance <span>(売上推移)</span></h3>
-                      <span className="db-panel-badge">Last 30 days ▾</span>
+                      <h3>Performa Penjualan <span>(売上推移)</span></h3>
+                      <span className="db-panel-badge">30 hari terakhir ▾</span>
                     </div>
                     <div style={{ width: '100%', height: 220, position: 'relative' }}>
                       <canvas ref={chartRef} style={{ width: '100%', height: '100%' }} />
@@ -276,43 +372,52 @@ export default function AdminDashboard() {
 
                   <div className="db-panel db-bestseller">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/assets/Screenshot 2026-09-29 153513.png" alt="" className="db-best-cloud" />
-                    <h3>Best Selling Books</h3>
+                    <img src="/assets/deco-cloud.png" alt="" className="db-best-cloud" />
+                    <h3>Buku Terlaris</h3>
                     <p className="db-best-jp">ベストセラー</p>
                     <div className="db-best-list">
                       {bestSellers.length === 0 && <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Belum ada data</p>}
-                      {bestSellers.map(([name, qty], i) => (
-                        <div key={name} className="db-best-item">
-                          <div className="db-best-rank">#{i + 1}</div>
-                          <div className="db-best-cover" />
-                          <div className="db-best-info">
-                            <div className="db-best-name">{name}</div>
-                            <div className="db-best-qty">#{qty} sales</div>
+                      {bestSellers.map(([name, qty], i) => {
+                        const j = bookJenjang.get(name) || ''
+                        const c = JENJANG_COLORS[j] || '#b0b0b0'
+                        return (
+                          <div key={name} className="db-best-item">
+                            <div className="db-best-rank">#{i + 1}</div>
+                            <div className="db-best-book" style={{ '--bk': c } as React.CSSProperties}>
+                              <div className="db-best-book-spine" />
+                              <div className="db-best-book-front">
+                                <div className="db-best-book-stripe" />
+                              </div>
+                            </div>
+                            <div className="db-best-info">
+                              <div className="db-best-name">{name}</div>
+                              <div className="db-best-qty">{qty} terjual</div>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
 
                   <div className="db-panel db-orders-panel">
                     <div className="db-panel-head">
-                      <h3>Recent Orders <span>(最新の注文)</span></h3>
+                      <h3>Pesanan Terbaru</h3>
                     </div>
                     <table className="db-tbl">
                       <thead>
-                        <tr><th>Order ID</th><th>Customer</th><th>Book Title</th><th>Date</th><th>Status</th></tr>
+                        <tr><th>ID Pesanan</th><th>Pelanggan</th><th>Buku</th><th>Tanggal</th><th>Status</th></tr>
                       </thead>
                       <tbody>
                         {orders.length === 0 && <tr><td colSpan={5} className="db-tbl-empty">Belum ada pesanan</td></tr>}
                         {orders.slice(0, 6).map(o => (
-                          <tr key={o.id} onClick={() => window.location.href = `/order/${o.id}/nota`} style={{ cursor: 'pointer' }}>
+                          <tr key={o.id} onClick={() => window.location.href = `/admin/dashboard/nota/${o.id}`} style={{ cursor: 'pointer' }}>
                             <td className="db-tbl-id">{o.nomorNota}</td>
                             <td>{o.buyer.nama}</td>
                             <td>{o.items[0]?.book.bidangStudi || '-'}</td>
                             <td>{formatDate(o.tanggal)}</td>
                             <td>
                               <span className={`db-status ${o.status === 'confirmed' ? 'confirmed' : 'pending'}`}>
-                                {o.status === 'confirmed' ? 'Shipped' : 'Pending'}
+                                {o.status === 'confirmed' ? 'Terkirim' : 'Menunggu'}
                               </span>
                             </td>
                           </tr>
@@ -325,10 +430,10 @@ export default function AdminDashboard() {
             )}
 
             {/* ===== PESANAN ===== */}
-            {activeTab === 'pesanan' && (
+            {!loading && !error && activeTab === 'pesanan' && (
               <>
                 <div className="db-panel-head" style={{ marginBottom: 16 }}>
-                  <h3>Daftar Pesanan <span>(注文管理)</span></h3>
+                  <h3>Daftar Pesanan</h3>
                 </div>
                 <div className="db-panel">
                   <table className="db-tbl">
@@ -355,7 +460,12 @@ export default function AdminDashboard() {
                             </span>
                           </td>
                           <td>{formatDate(o.tanggal)}</td>
-                          <td><button className="db-sm-btn" onClick={() => window.location.href = `/order/${o.id}/nota`}>📄 Nota</button></td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              {o.status === 'pending' && <button className="db-sm-btn db-sm-btn--confirm" onClick={() => confirmOrder(o.id)}>✓ Konfirmasi</button>}
+                              <button className="db-sm-btn" onClick={() => window.location.href = `/admin/dashboard/nota/${o.id}`}>📄 Nota</button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -365,7 +475,7 @@ export default function AdminDashboard() {
             )}
 
             {/* ===== KATALOG ===== */}
-            {activeTab === 'katalog' && (() => {
+            {!loading && !error && activeTab === 'katalog' && (() => {
               const q = catalogSearch.toLowerCase()
               const jenjangList = Array.from(new Set(books.map(b => b.jenjang))).sort()
               const filtered = books.filter(b =>
@@ -375,7 +485,7 @@ export default function AdminDashboard() {
               return (
               <>
                 <div className="db-panel-head" style={{ marginBottom: 16 }}>
-                  <h3>Katalog Buku <span>(書籍一覧) — {filtered.length} buku</span></h3>
+                  <h3>Katalog Buku <span>— {filtered.length} buku</span></h3>
                 </div>
                 <div className="db-catalog-toolbar">
                   <div className="db-catalog-search">
@@ -421,31 +531,140 @@ export default function AdminDashboard() {
               )
             })()}
 
-            {/* ===== PENGATURAN ===== */}
-            {activeTab === 'pengaturan' && (
+            {/* ===== AKUN ===== */}
+            {!loading && !error && activeTab === 'akun' && (
               <>
                 <div className="db-panel-head" style={{ marginBottom: 16 }}>
-                  <h3>Pengaturan <span>(設定)</span></h3>
+                  <h3>Manajemen Akun</h3>
                 </div>
-                <div className="db-panel" style={{ padding: 24 }}>
-                  <div className="form-group" style={{ marginBottom: 16 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Potongan Default (%)</label>
-                    <input className="input" type="number" defaultValue={10} style={{ maxWidth: 200 }} />
+
+                {accMsg && <div className="db-acc-msg" onClick={() => setAccMsg('')}>{accMsg}</div>}
+
+                {/* Create form */}
+                <div className="db-panel" style={{ padding: 20, marginBottom: 16 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-brown)', marginBottom: 12 }}>Buat Akun Baru</h4>
+                  <div className="db-acc-form">
+                    <div className="db-acc-row">
+                      <select className="db-acc-input" value={accForm.type} onChange={e => setAccForm(f => ({ ...f, type: e.target.value as 'admin' | 'division' }))}>
+                        <option value="division">Divisi (User)</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    {accForm.type === 'division' && (
+                      <div className="db-acc-row">
+                        <input className="db-acc-input" placeholder="Nama Divisi" value={accForm.namaDivisi} onChange={e => setAccForm(f => ({ ...f, namaDivisi: e.target.value }))} />
+                      </div>
+                    )}
+                    <div className="db-acc-row">
+                      <input className="db-acc-input" placeholder="Username" value={accForm.username} onChange={e => setAccForm(f => ({ ...f, username: e.target.value }))} />
+                    </div>
+                    <div className="db-acc-row">
+                      <input className="db-acc-input" type="password" placeholder="Password" value={accForm.password} onChange={e => setAccForm(f => ({ ...f, password: e.target.value }))} />
+                    </div>
+                    <button className="db-acc-btn db-acc-btn-primary" onClick={async () => {
+                      const res = await fetch('/api/admin/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(accForm) })
+                      const d = await res.json()
+                      if (d.ok) { setAccMsg('Akun berhasil dibuat!'); setAccForm({ type: 'division', username: '', password: '', namaDivisi: '' }); loadAccounts() }
+                      else setAccMsg(d.error || 'Gagal membuat akun')
+                    }}>Buat Akun</button>
                   </div>
-                  <div className="form-group" style={{ marginBottom: 16 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Nama Perusahaan</label>
-                    <input className="input" defaultValue="CV PUTRA NUGRAHA" style={{ maxWidth: 400 }} />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 16 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Alamat</label>
-                    <input className="input" defaultValue="Jl. Merapi Raya No 17 Mojosongo Jebres Solo" style={{ maxWidth: 400 }} />
-                  </div>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>* Pengaturan ini saat ini hanya tampilan preview</p>
+                </div>
+
+                {accLoading ? <p className="uo-loading">Memuat...</p> : (
+                  <>
+                    {/* Admin list */}
+                    <div className="db-panel" style={{ padding: 20, marginBottom: 16 }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-brown)', marginBottom: 12 }}>
+                        Akun Admin <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({accAdmins.length})</span>
+                      </h4>
+                      {accAdmins.map(a => (
+                        <div key={a.id} className="db-acc-item">
+                          <div>
+                            <div className="db-acc-item-name">{a.username}</div>
+                            <div className="db-acc-item-meta">Admin</div>
+                          </div>
+                          <button className="db-acc-btn db-acc-btn-reset" onClick={() => { setResetTarget({ type: 'admin', id: a.id, username: a.username }); setResetPw('') }}>Reset Password</button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Division list */}
+                    <div className="db-panel" style={{ padding: 20 }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-brown)', marginBottom: 12 }}>
+                        Akun Divisi <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({accDivisions.length})</span>
+                      </h4>
+                      {accDivisions.map(d => (
+                        <div key={d.id} className="db-acc-item">
+                          <div>
+                            <div className="db-acc-item-name">{d.namaDivisi}</div>
+                            <div className="db-acc-item-meta">@{d.username}</div>
+                          </div>
+                          <button className="db-acc-btn db-acc-btn-reset" onClick={() => { setResetTarget({ type: 'division', id: d.id, username: d.username }); setResetPw('') }}>Reset Password</button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Reset password modal */}
+                {resetTarget && (
+                  <>
+                    <div className="db-user-backdrop" onClick={() => setResetTarget(null)} />
+                    <div className="db-acc-modal">
+                      <h4 style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-brown)', marginBottom: 4 }}>Reset Password</h4>
+                      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>Akun: <strong>{resetTarget.username}</strong></p>
+                      <input className="db-acc-input" type="password" placeholder="Password baru" value={resetPw} onChange={e => setResetPw(e.target.value)} style={{ marginBottom: 12 }} />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="db-acc-btn db-acc-btn-primary" onClick={async () => {
+                          if (!resetPw.trim()) return
+                          const res = await fetch('/api/admin/accounts', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: resetTarget.type, id: resetTarget.id, password: resetPw }) })
+                          const d = await res.json()
+                          if (d.ok) { setAccMsg('Password berhasil direset!'); setResetTarget(null) }
+                          else setAccMsg(d.error || 'Gagal reset password')
+                        }}>Simpan</button>
+                        <button className="db-acc-btn" style={{ background: 'rgba(210,170,150,0.15)', color: 'var(--accent-brown)' }} onClick={() => setResetTarget(null)}>Batal</button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ===== PENGATURAN ===== */}
+            {!loading && !error && activeTab === 'pengaturan' && (
+              <>
+                <div className="db-panel-head" style={{ marginBottom: 16 }}>
+                  <h3>Pengaturan</h3>
+                </div>
+                <div className="db-panel" style={{ padding: 24, textAlign: 'center' }}>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>Fitur pengaturan sedang dalam pengembangan.</p>
+                  <button className="db-sm-btn" onClick={() => setActiveTab('akun')}>Kelola Akun</button>
                 </div>
               </>
             )}
         </div>
       </main>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="db-bottom-nav">
+        {([
+          { icon: '/assets/icon-dashboard.png', label: 'Dasbor', tab: 'dashboard' as Tab },
+          { icon: '/assets/icon-books.png', label: 'Katalog', tab: 'katalog' as Tab },
+          { icon: '/assets/icon-orders.png', label: 'Pesanan', tab: 'pesanan' as Tab },
+          { icon: '/assets/icon-customers.png', label: 'Akun', tab: 'akun' as Tab },
+          { icon: '/assets/icon-settings.png', label: 'Lainnya', tab: 'pengaturan' as Tab },
+        ]).map(item => (
+          <button
+            key={item.tab}
+            className={`db-bottom-tab${activeTab === item.tab ? ' db-bottom-tab--active' : ''}`}
+            onClick={() => setActiveTab(item.tab)}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={item.icon} alt="" className="db-bottom-tab-ico" />
+            <span className="db-bottom-tab-label">{item.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

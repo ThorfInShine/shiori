@@ -1,7 +1,9 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { getAdminSession, unauthorized } from '@/lib/auth'
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!await getAdminSession()) return unauthorized()
   const { id } = await params
   const order = await prisma.order.findUnique({
     where: { id: parseInt(id) },
@@ -12,6 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!await getAdminSession()) return unauthorized()
   const { id } = await params
   const body = await req.json()
   const order = await prisma.order.update({
