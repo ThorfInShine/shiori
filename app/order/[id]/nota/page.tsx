@@ -1,16 +1,15 @@
 import { prisma } from '@/lib/prisma'
-import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
+import { getAdminSession, getDivisionSession } from '@/lib/auth'
 import NotaClient from './NotaClient'
 
 export default async function NotaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const c = await cookies()
-  const adminSession = c.get('admin_session')?.value
-  const divisionCookie = c.get('division_session')?.value
+  const adminSession = await getAdminSession()
+  const divisionSession = await getDivisionSession()
 
-  // Must have some session (proxy enforces this too, defense-in-depth)
-  if (!adminSession && !divisionCookie) redirect('/admin')
+  // Must have some valid session
+  if (!adminSession && !divisionSession) redirect('/login')
 
   const order = await prisma.order.findUnique({
     where: { id: parseInt(id) },
@@ -19,11 +18,8 @@ export default async function NotaPage({ params }: { params: Promise<{ id: strin
   if (!order) notFound()
 
   // IDOR protection: division users can only view their own orders
-  if (!adminSession && divisionCookie) {
-    try {
-      const div = JSON.parse(divisionCookie)
-      if (order.divisionId && order.divisionId !== div.id) notFound()
-    } catch { notFound() }
+  if (!adminSession && divisionSession) {
+    if (order.divisionId !== divisionSession.id) notFound()
   }
 
   // Serialize dates

@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getDivisionSession, getAdminSession } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
-  const cookie = req.cookies.get('division_session')?.value
-  if (!cookie) {
-    return NextResponse.json({ ok: false }, { status: 401 })
+  // Check admin session first
+  const adminSession = await getAdminSession()
+  if (adminSession) {
+    return NextResponse.json({ ok: true, admin: true, username: adminSession })
   }
-  try {
-    const data = JSON.parse(cookie)
-    return NextResponse.json({ ok: true, id: data.id, username: data.username, name: data.name })
-  } catch {
-    return NextResponse.json({ ok: false }, { status: 401 })
+
+  // Check division session
+  const divisionSession = await getDivisionSession()
+  if (divisionSession) {
+    return NextResponse.json({ ok: true, admin: false, id: divisionSession.id, username: divisionSession.username, name: divisionSession.name })
   }
+
+  return NextResponse.json({ ok: false }, { status: 401 })
 }

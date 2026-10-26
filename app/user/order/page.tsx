@@ -89,14 +89,14 @@ export default function UserOrderPage() {
 
   useEffect(() => {
     fetch('/api/user/session').then(r => r.json()).then(d => {
-      if (!d.ok) { router.push('/admin'); return }
+      if (!d.ok) { router.push('/login'); return }
       setDivisionName(d.name)
       setDivisionId(d.id)
       // Load cart from DB
       fetch('/api/user/cart').then(r => r.json()).then(data => {
         if (data.ok && data.cart?.length) setCart(data.cart)
       }).catch(() => {})
-    }).catch(() => router.push('/admin'))
+    }).catch(() => router.push('/login'))
 
     fetch('/api/books').then(r => r.json()).then((data: Book[]) => {
       const j = [...new Set(data.map(b => b.jenjang))].sort()
@@ -222,7 +222,10 @@ export default function UserOrderPage() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
             {cartCount > 0 && <span className="uo-cart-badge">{cartCount}</span>}
           </button>
-          <button className="uo-logout-btn" onClick={() => { document.cookie = 'division_session=; path=/; max-age=0'; router.push('/admin') }} title="Keluar">
+          <button className="uo-logout-btn" onClick={async () => {
+            await fetch('/api/admin/login', { method: 'DELETE' })
+            router.push('/login')
+          }} title="Keluar">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           </button>
         </div>

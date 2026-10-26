@@ -1,11 +1,11 @@
 import { prisma } from '@/lib/prisma'
-import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
+import { getAdminSession } from '@/lib/auth'
 import NotaClient from '@/app/order/[id]/nota/NotaClient'
 
 export default async function AdminNotaPage({ params }: { params: Promise<{ id: string }> }) {
-  const c = await cookies()
-  if (!c.get('admin_session')?.value) redirect('/admin')
+  const adminSession = await getAdminSession()
+  if (!adminSession) redirect('/login')
 
   const { id } = await params
   const order = await prisma.order.findUnique({

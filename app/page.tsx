@@ -52,7 +52,7 @@ export default async function Home() {
           <span className="lp-brand-name">Shiori</span>
         </Link>
         <NavLinks />
-        <Link href="/admin" className="lp-nav-login" id="lp-login-nav">
+        <Link href="/login" className="lp-nav-login" id="lp-login-nav">
           Masuk
         </Link>
       </nav>
@@ -74,7 +74,7 @@ export default async function Home() {
           </p>
 
           <div className="lp-hero-actions">
-            <Link href="/admin" className="lp-btn-primary" id="lp-cta-main">
+            <Link href="/login" className="lp-btn-primary" id="lp-cta-main">
               Masuk
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </Link>
