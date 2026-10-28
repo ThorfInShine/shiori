@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 
-const VALID_JENJANG = ['SD', 'SMP', 'SMA', 'SMK', 'MADRASAH', 'TK AKADEMIK', 'AKM & P5', 'PRODUKTIF', 'ASAJ UM', 'JURNAL & TK', 'MTS', 'MI', 'SMA-SMK']
+const VALID_JENJANG = ['SD', 'SMP', 'SMA', 'SMK', 'MADRASAH', 'TK AKADEMIK', 'AKM & P5', 'PRODUKTIF', 'ASAJ UM', 'JURNAL & TK', 'MTS', 'MI', 'SMA-SMK', 'PROD', 'TKA']
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)

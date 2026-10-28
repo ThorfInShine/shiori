@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -70,20 +70,20 @@ export default function UserOrderPage() {
   const [orderId, setOrderId] = useState<number | null>(null)
   const [orders, setOrders] = useState<OrderData[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
-  const saveTimer = useState<ReturnType<typeof setTimeout> | null>(null)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Debounced save cart to DB whenever cart changes
   useEffect(() => {
     if (divisionId == null) return
-    if (saveTimer[0]) clearTimeout(saveTimer[0])
-    saveTimer[0] = setTimeout(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
       fetch('/api/user/cart', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cart: cart.map(c => ({ bookId: c.book.id, jenis: c.jenis, jumlah: c.jumlah })) }),
       }).catch(() => {})
     }, 500)
-    return () => { if (saveTimer[0]) clearTimeout(saveTimer[0]) }
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, divisionId])
 
@@ -98,10 +98,12 @@ export default function UserOrderPage() {
       }).catch(() => {})
     }).catch(() => router.push('/login'))
 
-    fetch('/api/books').then(r => r.json()).then((data: Book[]) => {
-      const j = [...new Set(data.map(b => b.jenjang))].sort()
-      setJenjangList(j)
-    })
+    fetch('/api/books').then(r => r.json()).then(data => {
+      if (Array.isArray(data)) {
+        const j = [...new Set(data.map(b => b.jenjang))].sort()
+        setJenjangList(j)
+      }
+    }).catch(() => {})
   }, [router])
 
   const loadOrders = () => {
@@ -120,12 +122,14 @@ export default function UserOrderPage() {
   const selectJenjang = (j: string) => {
     setSelectedJenjang(j)
     setLoading(true)
-    fetch(`/api/books?jenjang=${encodeURIComponent(j)}`).then(r => r.json()).then((data: Book[]) => {
-      setBooks(data)
+    fetch(`/api/books?jenjang=${encodeURIComponent(j)}`).then(r => r.json()).then(data => {
+      if (Array.isArray(data)) {
+        setBooks(data)
+        setStep('buku')
+        setBrowseStep('buku')
+      }
       setLoading(false)
-      setStep('buku')
-      setBrowseStep('buku')
-    })
+    }).catch(() => setLoading(false))
   }
 
   const addToCart = (book: Book, jenis: 'lks' | 'pg') => {
@@ -218,12 +222,16 @@ export default function UserOrderPage() {
           </div>
         </div>
         <div className="uo-header-right">
-          <button className="uo-cart-btn" onClick={() => { setTab('order'); cart.length > 0 && setStep('cart') }}>
+          <button className="uo-cart-btn" onClick={() => {
+            setTab('order')
+            if (cart.length > 0) setStep('cart')
+            else setStep('jenjang')
+          }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
             {cartCount > 0 && <span className="uo-cart-badge">{cartCount}</span>}
           </button>
           <button className="uo-logout-btn" onClick={async () => {
-            await fetch('/api/admin/login', { method: 'DELETE' })
+            await fetch('/api/user/logout', { method: 'POST' })
             router.push('/login')
           }} title="Keluar">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
