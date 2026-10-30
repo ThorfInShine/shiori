@@ -1,9 +1,9 @@
+import { prisma } from '@/lib/prisma'
 import Image from 'next/image'
 import Link from 'next/link'
+import { Bookshelf } from './bookshelf'
 import { NavLinks } from './nav-links'
 import { RevealObserver } from './reveal'
-import { Bookshelf } from './bookshelf'
-import { prisma } from '@/lib/prisma'
 
 export default async function Home() {
   let jenjangData: { jenjang: string; _count: number }[] = []

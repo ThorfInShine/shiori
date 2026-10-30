@@ -70,6 +70,7 @@ export default function UserOrderPage() {
   const [orderId, setOrderId] = useState<number | null>(null)
   const [orders, setOrders] = useState<OrderData[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Debounced save cart to DB whenever cart changes
@@ -84,7 +85,6 @@ export default function UserOrderPage() {
       }).catch(() => {})
     }, 500)
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, divisionId])
 
   useEffect(() => {
@@ -105,6 +105,44 @@ export default function UserOrderPage() {
       }
     }).catch(() => {})
   }, [router])
+
+  // Restore wizard state from sessionStorage
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('shiori_wizard')
+      if (saved) {
+        const s = JSON.parse(saved)
+        if (s.buyerNama) setBuyerNama(s.buyerNama)
+        if (s.buyerArea) setBuyerArea(s.buyerArea)
+        if (s.browseStep) setBrowseStep(s.browseStep)
+        if (s.selectedJenjang) {
+          setSelectedJenjang(s.selectedJenjang)
+          if (s.step === 'buku' || s.step === 'cart' || s.step === 'checkout') {
+            fetch(`/api/books?jenjang=${encodeURIComponent(s.selectedJenjang)}`)
+              .then(r => r.json())
+              .then(data => { if (Array.isArray(data)) setBooks(data) })
+              .catch(() => {})
+          }
+        }
+        if (s.step) setStep(s.step)
+      }
+    } catch {}
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save wizard state
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('shiori_wizard', JSON.stringify({ step, selectedJenjang, buyerNama, buyerArea, browseStep }))
+    } catch {}
+  }, [step, selectedJenjang, buyerNama, buyerArea, browseStep])
+
+  // Warn on unload during checkout
+  useEffect(() => {
+    if (step !== 'checkout' || cart.length === 0) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [step, cart.length])
 
   const loadOrders = () => {
     setOrdersLoading(true)
@@ -132,26 +170,29 @@ export default function UserOrderPage() {
     }).catch(() => setLoading(false))
   }
 
+  const MAX_QTY = 999
+
   const addToCart = (book: Book, jenis: 'lks' | 'pg') => {
     setCart(prev => {
       const existing = prev.find(c => c.book.id === book.id && c.jenis === jenis)
       if (existing) {
-        return prev.map(c => c.book.id === book.id && c.jenis === jenis ? { ...c, jumlah: c.jumlah + 1 } : c)
+        return prev.map(c => c.book.id === book.id && c.jenis === jenis ? { ...c, jumlah: Math.min(MAX_QTY, c.jumlah + 1) } : c)
       }
       return [...prev, { book, jenis, jumlah: 1 }]
     })
   }
 
   const updateQty = (bookId: number, jenis: 'lks' | 'pg', qty: number) => {
-    if (qty <= 0) {
+    const cleanQty = Math.min(MAX_QTY, Math.max(0, Math.floor(Number(qty) || 0)))
+    if (cleanQty <= 0) {
       setCart(prev => prev.filter(c => !(c.book.id === bookId && c.jenis === jenis)))
     } else {
       setCart(prev => {
         const exists = prev.some(c => c.book.id === bookId && c.jenis === jenis)
-        if (exists) return prev.map(c => c.book.id === bookId && c.jenis === jenis ? { ...c, jumlah: qty } : c)
+        if (exists) return prev.map(c => c.book.id === bookId && c.jenis === jenis ? { ...c, jumlah: cleanQty } : c)
         const book = books.find(b => b.id === bookId)
         if (!book) return prev
-        return [...prev, { book, jenis, jumlah: qty }]
+        return [...prev, { book, jenis, jumlah: cleanQty }]
       })
     }
   }
@@ -178,12 +219,19 @@ export default function UserOrderPage() {
       })
       const data = await res.json()
       if (data.ok) {
-        setSubmitOk(true); setOrderId(data.orderId)
+        setShowConfirmModal(false)
+        setSubmitOk(true)
+        setOrderId(data.orderId)
+        sessionStorage.removeItem('shiori_wizard')
         fetch('/api/user/cart', { method: 'DELETE' }).catch(() => {})
       } else {
         setSubmitError(data.error || 'Gagal mengirim pesanan. Coba lagi.')
       }
-    } catch { setSubmitError('Koneksi gagal. Periksa internet dan coba lagi.') } finally { setSubmitting(false) }
+    } catch {
+      setSubmitError('Koneksi gagal. Periksa internet dan coba lagi.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const fmt = (n: number) => 'Rp ' + n.toLocaleString('id-ID')
@@ -256,13 +304,17 @@ export default function UserOrderPage() {
         <>
           {/* Steps indicator with connecting line */}
           <div className="uo-steps">
-            {STEP_LIST.map((s, i) => (
-              <div key={s.key} className={`uo-step ${step === s.key ? 'uo-step--active' : ''} ${stepIdx > i ? 'uo-step--done' : ''}`}>
-                <div className="uo-step-dot">{stepIdx > i ? '\u2713' : i + 1}</div>
+            {STEP_LIST.map((s, i) => {
+              const cartStepIdx = STEP_LIST.findIndex(x => x.key === 'cart')
+              const isDone = stepIdx > i || (cart.length > 0 && i < cartStepIdx)
+              return (
+              <div key={s.key} className={`uo-step ${step === s.key ? 'uo-step--active' : ''} ${isDone ? 'uo-step--done' : ''}`}>
+                <div className="uo-step-dot">{isDone ? '\u2713' : i + 1}</div>
                 <span className="uo-step-label">{s.label}</span>
                 {i < STEP_LIST.length - 1 && <div className="uo-step-line" />}
               </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* Step 1: Jenjang */}
@@ -306,6 +358,13 @@ export default function UserOrderPage() {
                   </div>
                 ))}
               </div>
+              {cart.length > 0 && (
+                <div style={{ textAlign: 'center', marginTop: 16 }}>
+                  <button className="uo-btn uo-btn-secondary" onClick={() => setStep('cart')}>
+                    Kembali ke Keranjang ({cartCount} buku)
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -322,47 +381,176 @@ export default function UserOrderPage() {
                   Buku {selectedJenjang}
                 </h2>
               </div>
-              <input className="uo-search" type="search" value={bookSearch} onChange={e => setBookSearch(e.target.value)} placeholder="Cari buku..." />
+              <div className="uo-search-container">
+                <input
+                  id="book-search-input"
+                  className="uo-search"
+                  type="search"
+                  value={bookSearch}
+                  onChange={e => setBookSearch(e.target.value)}
+                  placeholder="Cari mata pelajaran atau kelas..."
+                  aria-label="Cari buku berdasarkan mata pelajaran atau kelas"
+                />
+              </div>
               {loading ? (
                 <p className="uo-loading">Memuat buku...</p>
               ) : (
                 <div className="uo-book-list">
-                  {books.filter(b => !bookSearch || b.bidangStudi.toLowerCase().includes(bookSearch.toLowerCase())).map(book => (
-                    <div key={book.id} className="uo-book-row" style={{ '--jc': JENJANG_COLORS[book.jenjang] || '#b0b0b0' } as React.CSSProperties}>
-                      <div className="uo-book-info">
-                        <div className="uo-book-name">{book.bidangStudi}</div>
-                        <div className="uo-book-meta">{book.kelas && <span>Kelas {book.kelas}</span>}</div>
-                      </div>
-                      <div className="uo-book-actions">
-                        {book.hargaLks != null && book.hargaLks > 0 && (
-                          <div className="uo-book-type">
-                            <div className="uo-book-price">{fmt(book.hargaLks)}</div>
-                            <div className="uo-qty-row">
-                              <button className="uo-qty-btn" onClick={() => updateQty(book.id, 'lks', getCartQty(book.id, 'lks') - 1)}>{'\u2212'}</button>
-                              <input type="number" className="uo-qty-val" value={getCartQty(book.id, 'lks') || ''} min={0} onChange={e => updateQty(book.id, 'lks', parseInt(e.target.value) || 0)} placeholder="0" />
-                              <button className="uo-qty-btn" onClick={() => addToCart(book, 'lks')}>+</button>
+                  {(() => {
+                    const q = bookSearch.toLowerCase().trim()
+                    const filtered = books.filter(b => {
+                      if (!q) return true
+                      return b.bidangStudi.toLowerCase().includes(q) ||
+                        (b.kelas && b.kelas.toLowerCase().includes(q)) ||
+                        `kelas ${b.kelas || ''}`.toLowerCase().includes(q)
+                    })
+                    const grouped = filtered.reduce<Record<string, Book[]>>((acc, b) => {
+                      const key = b.kelas || 'Umum'
+                      ;(acc[key] ||= []).push(b)
+                      return acc
+                    }, {})
+                    const kelasOrder = Object.keys(grouped).sort((a, b) => {
+                      if (a === 'Umum') return 1
+                      if (b === 'Umum') return -1
+                      return a.localeCompare(b, 'id', { numeric: true })
+                    })
+                    return kelasOrder.map(kelas => (
+                      <div key={kelas} className="uo-subject-group">
+                        <div className="uo-subject-group-header">
+                          <span className="uo-subject-group-title">Kelas {kelas}</span>
+                          <span className="uo-subject-group-count">{grouped[kelas].length} buku</span>
+                        </div>
+                        {grouped[kelas].map(book => {
+                    const lksQty = getCartQty(book.id, 'lks')
+                    const pgQty = getCartQty(book.id, 'pg')
+                    const hasCart = lksQty > 0 || pgQty > 0
+
+                    return (
+                      <div
+                        key={book.id}
+                        className={`uo-book-row ${hasCart ? 'uo-book-row--active' : ''}`}
+                        style={{ '--jc': JENJANG_COLORS[book.jenjang] || '#b0b0b0' } as React.CSSProperties}
+                      >
+                        <div className="uo-book-info">
+                          <div className="uo-book-name">{book.bidangStudi}</div>
+                          <div className="uo-book-meta">{book.kelas && <span>Kelas {book.kelas}</span>}</div>
+                        </div>
+                        <div className="uo-book-actions">
+                          {book.hargaLks != null && book.hargaLks > 0 && (
+                            <div className="uo-book-type">
+                              <div className="uo-book-price">{fmt(book.hargaLks)}</div>
+                              <div className="uo-qty-row">
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  aria-label={`Kurangi LKS ${book.bidangStudi}`}
+                                  className="uo-qty-btn"
+                                  onClick={() => updateQty(book.id, 'lks', lksQty - 1)}
+                                >
+                                  {'\u2212'}
+                                </button>
+                                <input
+                                  type="number"
+                                  className="uo-qty-val"
+                                  value={lksQty || ''}
+                                  min={0}
+                                  max={999}
+                                  aria-label={`Jumlah LKS ${book.bidangStudi}`}
+                                  onChange={e => updateQty(book.id, 'lks', parseInt(e.target.value, 10) || 0)}
+                                  placeholder="0"
+                                />
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  aria-label={`Tambah LKS ${book.bidangStudi}`}
+                                  className="uo-qty-btn"
+                                  onClick={() => addToCart(book, 'lks')}
+                                >
+                                  +
+                                </button>
+                              </div>
+                              <div className="uo-batch-row">
+                                {[10, 25, 30].map(add => (
+                                  <button
+                                    key={add}
+                                    type="button"
+                                    tabIndex={-1}
+                                    className="uo-batch-chip"
+                                    title={`Tambah ${add} eksemplar LKS`}
+                                    onClick={() => updateQty(book.id, 'lks', lksQty + add)}
+                                  >
+                                    +{add}
+                                  </button>
+                                ))}
+                              </div>
+                              <span className="uo-type-badge uo-type-badge--lks" title="Lembar Kerja Siswa">
+                                {'LKS \u2022 Siswa'}
+                              </span>
                             </div>
-                            <span className="uo-type-label" title="Lembar Kerja Siswa">LKS</span>
-                          </div>
-                        )}
-                        {book.hargaPg != null && book.hargaPg > 0 && (
-                          <div className="uo-book-type">
-                            <div className="uo-book-price">{fmt(book.hargaPg)}</div>
-                            <div className="uo-qty-row">
-                              <button className="uo-qty-btn" onClick={() => updateQty(book.id, 'pg', getCartQty(book.id, 'pg') - 1)}>{'\u2212'}</button>
-                              <input type="number" className="uo-qty-val" value={getCartQty(book.id, 'pg') || ''} min={0} onChange={e => updateQty(book.id, 'pg', parseInt(e.target.value) || 0)} placeholder="0" />
-                              <button className="uo-qty-btn" onClick={() => addToCart(book, 'pg')}>+</button>
+                          )}
+                          {book.hargaPg != null && book.hargaPg > 0 && (
+                            <div className="uo-book-type">
+                              <div className="uo-book-price">{fmt(book.hargaPg)}</div>
+                              <div className="uo-qty-row">
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  aria-label={`Kurangi PG ${book.bidangStudi}`}
+                                  className="uo-qty-btn"
+                                  onClick={() => updateQty(book.id, 'pg', pgQty - 1)}
+                                >
+                                  {'\u2212'}
+                                </button>
+                                <input
+                                  type="number"
+                                  className="uo-qty-val"
+                                  value={pgQty || ''}
+                                  min={0}
+                                  max={999}
+                                  aria-label={`Jumlah PG ${book.bidangStudi}`}
+                                  onChange={e => updateQty(book.id, 'pg', parseInt(e.target.value, 10) || 0)}
+                                  placeholder="0"
+                                />
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  aria-label={`Tambah PG ${book.bidangStudi}`}
+                                  className="uo-qty-btn"
+                                  onClick={() => addToCart(book, 'pg')}
+                                >
+                                  +
+                                </button>
+                              </div>
+                              <div className="uo-batch-row">
+                                {[5, 10].map(add => (
+                                  <button
+                                    key={add}
+                                    type="button"
+                                    tabIndex={-1}
+                                    className="uo-batch-chip"
+                                    title={`Tambah ${add} eksemplar PG`}
+                                    onClick={() => updateQty(book.id, 'pg', pgQty + add)}
+                                  >
+                                    +{add}
+                                  </button>
+                                ))}
+                              </div>
+                              <span className="uo-type-badge uo-type-badge--pg" title="Petunjuk Guru">
+                                {'PG \u2022 Guru'}
+                              </span>
                             </div>
-                            <span className="uo-type-label" title="Perangkat Guru">PG</span>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
+                      </div>
+                    ))
+                  })()}
                 </div>
               )}
               {cart.length > 0 && (
-                <button className="uo-fab" onClick={() => setStep('cart')}>
+                <button className="uo-fab" onClick={() => setStep('cart')} aria-label={`Buka Keranjang: ${cartCount} buku, total ${fmt(subtotal)}`}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
                   Keranjang ({cartCount}) — {fmt(subtotal)}
                 </button>
@@ -399,20 +587,58 @@ export default function UserOrderPage() {
                           </div>
                         </div>
                         <div className="uo-qty-row">
-                          <button className="uo-qty-btn" onClick={() => updateQty(item.book.id, item.jenis, item.jumlah - 1)}>{'\u2212'}</button>
-                          <input type="number" className="uo-qty-val" value={item.jumlah || ''} min={1} onChange={e => updateQty(item.book.id, item.jenis, parseInt(e.target.value) || 0)} />
-                          <button className="uo-qty-btn" onClick={() => updateQty(item.book.id, item.jenis, item.jumlah + 1)}>+</button>
+                          <button
+                            type="button"
+                            tabIndex={-1}
+                            className="uo-qty-btn"
+                            aria-label={`Kurangi ${item.book.bidangStudi}`}
+                            onClick={() => updateQty(item.book.id, item.jenis, item.jumlah - 1)}
+                          >
+                            {'\u2212'}
+                          </button>
+                          <input
+                            type="number"
+                            className="uo-qty-val"
+                            value={item.jumlah || ''}
+                            min={1}
+                            max={999}
+                            aria-label={`Jumlah ${item.book.bidangStudi} ${item.jenis}`}
+                            onChange={e => updateQty(item.book.id, item.jenis, parseInt(e.target.value, 10) || 0)}
+                          />
+                          <button
+                            type="button"
+                            tabIndex={-1}
+                            className="uo-qty-btn"
+                            aria-label={`Tambah ${item.book.bidangStudi}`}
+                            onClick={() => updateQty(item.book.id, item.jenis, item.jumlah + 1)}
+                          >
+                            +
+                          </button>
                         </div>
                         <div className="uo-cart-item-total">{fmt(getPrice(item) * item.jumlah)}</div>
                       </div>
                     ))}
                   </div>
+                  <button className="uo-btn uo-btn-secondary" onClick={() => setStep('jenjang')} style={{ marginTop: 8 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    Tambah Buku Lain
+                  </button>
                   <div className="uo-cart-summary">
-                    <div className="uo-cart-total">
-                      <span>Subtotal ({cartCount} item)</span>
-                      <strong>{fmt(subtotal)}</strong>
+                    <div className="uo-checkout-line">
+                      <span>Subtotal ({cartCount} eks)</span>
+                      <span>{fmt(subtotal)}</span>
                     </div>
-                    <button className="uo-btn uo-btn-primary" onClick={() => setStep('checkout')}>Lanjut ke Pengiriman</button>
+                    <div className="uo-checkout-line" style={{ color: 'var(--uo-sakura-deep, #A34454)' }}>
+                      <span>Potongan Standar (10%)</span>
+                      <span>- {fmt(subtotal * 0.1)}</span>
+                    </div>
+                    <div className="uo-cart-total" style={{ marginTop: 12, paddingTop: 12, borderTop: '1.5px dashed var(--uo-kraft, #B89B7A)' }}>
+                      <span>Estimasi Netto</span>
+                      <strong>{fmt(subtotal * 0.9)}</strong>
+                    </div>
+                    <button className="uo-btn uo-btn-primary" onClick={() => setStep('checkout')}>
+                      Lanjut ke Pengiriman
+                    </button>
                   </div>
                 </>
               )}
@@ -431,13 +657,30 @@ export default function UserOrderPage() {
               </div>
               <div className="uo-checkout-form">
                 <div className="uo-field">
-                  <label className="uo-label">Nama Pemesan</label>
-                  <input className={`uo-input${touched.nama && !buyerNama.trim() ? ' uo-input--error' : ''}`} value={buyerNama} onChange={e => setBuyerNama(e.target.value)} onBlur={() => setTouched(p => ({ ...p, nama: true }))} placeholder="Nama lengkap pemesan" />
+                  <label htmlFor="buyer-nama" className="uo-label">Nama Pemesan</label>
+                  <input
+                    id="buyer-nama"
+                    className={`uo-input${touched.nama && !buyerNama.trim() ? ' uo-input--error' : ''}`}
+                    value={buyerNama}
+                    onChange={e => setBuyerNama(e.target.value)}
+                    onBlur={() => setTouched(p => ({ ...p, nama: true }))}
+                    placeholder="Nama lengkap pemesan (cth: Bpk. Ahmad Yani)"
+                    aria-required="true"
+                  />
                   {touched.nama && !buyerNama.trim() && <span className="uo-field-hint">Nama pemesan wajib diisi</span>}
                 </div>
                 <div className="uo-field">
-                  <label className="uo-label">Area / Wilayah</label>
-                  <input className={`uo-input${touched.area && !buyerArea.trim() ? ' uo-input--error' : ''}`} value={buyerArea} onChange={e => setBuyerArea(e.target.value)} onBlur={() => setTouched(p => ({ ...p, area: true }))} placeholder="Contoh: Surabaya, Sidoarjo" maxLength={100} />
+                  <label htmlFor="buyer-area" className="uo-label">Area / Wilayah</label>
+                  <input
+                    id="buyer-area"
+                    className={`uo-input${touched.area && !buyerArea.trim() ? ' uo-input--error' : ''}`}
+                    value={buyerArea}
+                    onChange={e => setBuyerArea(e.target.value)}
+                    onBlur={() => setTouched(p => ({ ...p, area: true }))}
+                    placeholder="Contoh: Surabaya, Solo, Sleman"
+                    maxLength={100}
+                    aria-required="true"
+                  />
                   {touched.area && !buyerArea.trim() && <span className="uo-field-hint">Area / wilayah wajib diisi</span>}
                 </div>
                 <div className="uo-checkout-summary">
@@ -448,14 +691,27 @@ export default function UserOrderPage() {
                       <span>{fmt(getPrice(item) * item.jumlah)}</span>
                     </div>
                   ))}
+                  <div className="uo-checkout-line" style={{ marginTop: 8, color: 'var(--uo-sakura-deep, #A34454)' }}>
+                    <span>Potongan Standar (10%)</span>
+                    <span>- {fmt(subtotal * 0.1)}</span>
+                  </div>
                   <div className="uo-checkout-total">
-                    <span>Total</span>
-                    <strong>{fmt(subtotal)}</strong>
+                    <span>Estimasi Netto</span>
+                    <strong>{fmt(subtotal * 0.9)}</strong>
                   </div>
                 </div>
                 {submitError && <div className="uo-toast-error">{submitError}</div>}
-                <button className="uo-btn uo-btn-primary" onClick={handleSubmit} disabled={submitting || !buyerNama.trim() || !buyerArea.trim()}>
-                  {submitting ? 'Mengirim...' : 'Kirim Pesanan'}
+                <button
+                  type="button"
+                  className="uo-btn uo-btn-primary"
+                  onClick={() => {
+                    setTouched({ nama: true, area: true })
+                    if (!buyerNama.trim() || !buyerArea.trim()) return
+                    setShowConfirmModal(true)
+                  }}
+                  disabled={submitting || !buyerNama.trim() || !buyerArea.trim()}
+                >
+                  Tinjau & Kirim Pesanan
                 </button>
               </div>
             </div>
@@ -490,7 +746,7 @@ export default function UserOrderPage() {
                   </div>
                   <div className="uo-order-buyer">
                     <span>{order.buyer.nama}</span>
-                    <span className="uo-order-area">{order.buyer.area}</span>
+                    <span className="uo-order-area">{'• '}{order.buyer.area}</span>
                   </div>
                   <div className="uo-order-items">
                     {order.items.slice(0, 3).map(item => (
@@ -519,6 +775,94 @@ export default function UserOrderPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+      {/* Safety Gate: Order Confirmation Modal */}
+      {showConfirmModal && (
+        <div
+          className="uo-modal-backdrop"
+          onClick={e => { if (e.target === e.currentTarget && !submitting) setShowConfirmModal(false) }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-confirm-title"
+        >
+          <div className="uo-modal-card">
+            <div className="uo-modal-header">
+              <h2 id="modal-confirm-title" className="uo-modal-title">Konfirmasi Pesanan</h2>
+              <p className="uo-modal-subtitle">Periksa rincian pesanan Anda sebelum dikirim ke distributor</p>
+            </div>
+            <div className="uo-modal-body">
+              <div>
+                <div className="uo-modal-section-title">Data Pengiriman</div>
+                <div className="uo-modal-meta-box">
+                  <div><strong>Divisi:</strong> {divisionName || '-'}</div>
+                  <div><strong>Jenjang:</strong> {[...new Set(cart.map(c => c.book.jenjang))].join(', ') || '-'}</div>
+                  <div><strong>Nama Pemesan:</strong> {buyerNama}</div>
+                  <div><strong>Area:</strong> {buyerArea}</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="uo-modal-section-title">Rincian Buku ({cartCount} Eksemplar)</div>
+                <table className="uo-modal-items-table">
+                  <thead>
+                    <tr>
+                      <th>Buku & Jenis</th>
+                      <th style={{ textAlign: 'center', width: 60 }}>Qty</th>
+                      <th style={{ textAlign: 'right', width: 110 }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cart.map(item => (
+                      <tr key={`${item.book.id}-${item.jenis}`}>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{item.book.bidangStudi}</div>
+                          <div style={{ fontSize: 11, color: 'var(--uo-text-muted, #54463C)' }}>
+                            {item.jenis.toUpperCase()} {item.book.kelas ? `• Kelas ${item.book.kelas}` : ''}
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{item.jumlah}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(getPrice(item) * item.jumlah)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="uo-modal-calc-box">
+                <div className="uo-modal-calc-row">
+                  <span>Subtotal ({cartCount} eks)</span>
+                  <strong>{fmt(subtotal)}</strong>
+                </div>
+                <div className="uo-modal-calc-row" style={{ color: 'var(--uo-sakura-deep, #A34454)' }}>
+                  <span>Potongan Harga (10%)</span>
+                  <strong>- {fmt(subtotal * 0.1)}</strong>
+                </div>
+                <div className="uo-modal-calc-total">
+                  <span>Estimasi Netto Nota</span>
+                  <strong>{fmt(subtotal * 0.9)}</strong>
+                </div>
+              </div>
+            </div>
+            <div className="uo-modal-footer">
+              <button
+                type="button"
+                className="uo-modal-btn-cancel"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={submitting}
+              >
+                Ubah Pesanan
+              </button>
+              <button
+                type="button"
+                className="uo-modal-btn-confirm"
+                onClick={handleSubmit}
+                disabled={submitting}
+              >
+                {submitting ? 'Mengirim...' : 'Ya, Kirim Pesanan'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
